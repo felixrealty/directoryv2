@@ -105,6 +105,55 @@
   .site-subtitle { font-size:10px; font-weight:500; color:#8878b0; letter-spacing:0.1em; text-transform:uppercase; margin-top:3px; max-height:14px; opacity:1; overflow:hidden; transition:max-height 0.22s, opacity 0.18s, margin-top 0.22s; }
   .site-header.is-scrolled .site-subtitle { max-height:0; opacity:0; margin-top:0; }
 
+  /* ── HEADER SEARCH ────────────────────────────── */
+  .search-toggle {
+    flex-shrink:0; width:38px; height:38px; border-radius:50%;
+    background:#f6f3fb; border:1px solid rgba(0,0,0,0.06);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; position:relative; padding:0; -webkit-tap-highlight-color:transparent;
+    transition: background 0.22s ease, border-color 0.22s ease, transform 0.15s ease, width 0.26s, height 0.26s;
+  }
+  .search-toggle:active { transform:scale(0.90); }
+  .search-toggle.is-open { background:var(--v-1f); border-color:var(--v-1f); }
+  .site-header.is-scrolled .search-toggle { width:32px; height:32px; }
+  .search-toggle-icon {
+    width:17px; height:17px; color:#1A1035;
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%) scale(1) rotate(0deg);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+  }
+  .search-toggle .icon-close { opacity:0; transform:translate(-50%,-50%) scale(0.4) rotate(-90deg); color:#fff; }
+  .search-toggle.is-open .icon-search { opacity:0; transform:translate(-50%,-50%) scale(0.4) rotate(90deg); }
+  .search-toggle.is-open .icon-close  { opacity:1; transform:translate(-50%,-50%) scale(1) rotate(0deg); }
+
+  .search-bar {
+    max-height:0; opacity:0; overflow:hidden;
+    transition: max-height 0.32s cubic-bezier(.4,0,.2,1), opacity 0.22s ease, margin-top 0.32s cubic-bezier(.4,0,.2,1);
+  }
+  .search-bar.open { max-height:54px; opacity:1; margin-top:10px; }
+  .search-bar-inner {
+    display:flex; align-items:center; gap:8px;
+    background:#f6f3fb; border:1px solid rgba(0,0,0,0.07); border-radius:12px;
+    padding:9px 12px;
+  }
+  .search-bar-icon { width:16px; height:16px; color:#9080b0; flex-shrink:0; }
+  .search-input {
+    flex:1; min-width:0; border:none; outline:none; background:transparent;
+    font-family:inherit; font-size:13px; font-weight:600; color:#1A1035;
+  }
+  .search-input::placeholder { color:#b0a8c8; font-weight:500; }
+  .search-clear {
+    flex-shrink:0; width:20px; height:20px; border-radius:50%;
+    background:rgba(0,0,0,0.08); color:#6a5a94;
+    display:flex; align-items:center; justify-content:center;
+    border:none; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent;
+    opacity:0; transform:scale(0.6); pointer-events:none;
+    transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
+  }
+  .search-clear svg { width:10px; height:10px; }
+  .search-clear.show { opacity:1; transform:scale(1); pointer-events:auto; }
+  .search-clear:active { background:rgba(0,0,0,0.16); }
+
   /* ── KEY STORE CARDS ──────────────────────────── */
   @keyframes cardIn {
     from { opacity:0; transform:translateY(14px) scale(0.95); }
@@ -453,6 +502,20 @@
     <div class="header-text">
       <div class="site-title">Felix <span>Plaza</span></div>
       <div class="site-subtitle">Store Directory</div>
+    </div>
+    <button class="search-toggle" id="search-toggle" onclick="toggleSearch()" aria-label="Search stores">
+      <svg class="search-toggle-icon icon-search" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <svg class="search-toggle-icon icon-close" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <div class="search-bar" id="search-bar">
+    <div class="search-bar-inner">
+      <svg class="search-bar-icon" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input type="text" id="search-input" class="search-input" placeholder="Search stores…" oninput="handleSearchInput(this)" autocomplete="off" enterkeyhint="search">
+      <button class="search-clear" id="search-clear" onclick="clearSearch()" aria-label="Clear search">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
     </div>
   </div>
 </header>
@@ -812,6 +875,11 @@
   syncHeaderOffset();
   window.addEventListener('resize', syncHeaderOffset);
 
+  const searchBarEl = document.getElementById('search-bar');
+  searchBarEl.addEventListener('transitionend', (e) => {
+    if (e.propertyName === 'max-height') syncHeaderOffset();
+  });
+
   const siteHeader = document.getElementById('site-header');
   const scrollBtn  = document.getElementById('scroll-top-btn');
 
@@ -876,6 +944,7 @@
   /* ── Filters ────────────────────────────── */
   let activeFloor = 'all';
   let activeCat   = 'all';
+  let searchTerm  = '';
 
   function applyFilters() {
     const rows = document.querySelectorAll('.brand-row');
@@ -885,8 +954,9 @@
       const rowFloors  = row.dataset.floor.split(' ');
       const floorMatch = activeFloor === 'all' || rowFloors.includes(activeFloor);
       const catMatch   = activeCat   === 'all' || row.dataset.cat === activeCat;
-      if (floorMatch && catMatch) { row.classList.remove('hidden'); visible++; }
-      else                        { row.classList.add('hidden'); }
+      const nameMatch  = !searchTerm || row.querySelector('.brand-name').textContent.toLowerCase().includes(searchTerm);
+      if (floorMatch && catMatch && nameMatch) { row.classList.remove('hidden'); visible++; }
+      else                                     { row.classList.add('hidden'); }
     });
 
     document.querySelectorAll('.cat-block').forEach(block => {
@@ -916,6 +986,40 @@
     document.querySelectorAll('.pill-floor').forEach(p => p.className = 'pill pill-floor');
     document.querySelector('.pill-floor').className = 'pill pill-floor active-all';
     applyFilters();
+  }
+
+  /* ── Header search ──────────────────────── */
+  function toggleSearch() {
+    const bar   = document.getElementById('search-bar');
+    const btn   = document.getElementById('search-toggle');
+    const input = document.getElementById('search-input');
+    const isOpen = !bar.classList.contains('open');
+
+    bar.classList.toggle('open', isOpen);
+    btn.classList.toggle('is-open', isOpen);
+
+    if (isOpen) {
+      setTimeout(() => input.focus(), 260);
+    } else {
+      input.blur();
+      if (input.value) { input.value = ''; searchTerm = ''; applyFilters(); }
+      document.getElementById('search-clear').classList.remove('show');
+    }
+  }
+
+  function handleSearchInput(el) {
+    searchTerm = el.value.trim().toLowerCase();
+    document.getElementById('search-clear').classList.toggle('show', el.value.length > 0);
+    applyFilters();
+  }
+
+  function clearSearch() {
+    const input = document.getElementById('search-input');
+    input.value = '';
+    searchTerm = '';
+    document.getElementById('search-clear').classList.remove('show');
+    applyFilters();
+    input.focus();
   }
 </script>
 </body>
